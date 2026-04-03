@@ -6,7 +6,7 @@
 
 ## 主な機能
 
-- 会社名、作品名、納品日、宛先、担当者名、備考の入力
+- 会社名、作品名、納品日、話数、フォルダー名、備考、自社フッターの入力
 - `.mp4` `.mov` `.avi` `.mxf` `.mkv` のドラッグ＆ドロップ読み込み
 - フォルダー投入時のサブフォルダー再帰探索
 - ffprobe による解像度、fps、総フレーム数、再生時間、ファイルサイズ取得
@@ -24,7 +24,8 @@ Python 3.10 以上をインストールしてください。
 ### 2. 依存ライブラリをインストール
 
 ```powershell
-cd D:\Documents\GitHub\SatsueiSlip
+git clone https://github.com/hakumeilab/SatsueiSlip.git
+cd SatsueiSlip
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
@@ -57,7 +58,7 @@ ffprobe -version
 ## 開発環境での起動手順
 
 ```powershell
-cd D:\Documents\GitHub\SatsueiSlip
+cd SatsueiSlip
 .\.venv\Scripts\Activate.ps1
 python -m satsuei_slip
 ```
@@ -73,7 +74,7 @@ satsuei-slip
 PyInstaller で exe 化できます。
 
 ```powershell
-cd D:\Documents\GitHub\SatsueiSlip
+cd SatsueiSlip
 .\.venv\Scripts\Activate.ps1
 python -m pip install pyinstaller
 pyinstaller .\SatsueiSlip.spec
@@ -96,7 +97,7 @@ Inno Setup 6 を使って Windows インストーラーを作成します。
 ### 2. インストーラーをビルド
 
 ```powershell
-cd D:\Documents\GitHub\SatsueiSlip
+cd SatsueiSlip
 .\.venv\Scripts\Activate.ps1
 .\scripts\build_installer.ps1
 ```
