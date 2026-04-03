@@ -1,5 +1,7 @@
 #define MyAppName "SatsueiSlip"
+#ifndef MyAppVersion
 #define MyAppVersion "0.1.0"
+#endif
 #define MyAppPublisher "SatsueiSlip"
 #define MyAppExeName "SatsueiSlip.exe"
 #define SourceDir "..\dist\SatsueiSlip"
