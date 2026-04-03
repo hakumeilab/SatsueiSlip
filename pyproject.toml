@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "satsuei-slip"
+version = "0.1.0"
+description = "ムービー納品伝票PDFを作成するWindows向けデスクトップアプリ"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "PySide6>=6.6",
+    "PyMuPDF>=1.24",
+    "reportlab>=4.0",
+]
+
+[project.scripts]
+satsuei-slip = "satsuei_slip.app:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
