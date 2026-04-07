@@ -18,6 +18,19 @@ class VideoProbeError(RuntimeError):
     pass
 
 
+def _hidden_process_kwargs() -> dict[str, object]:
+    if os.name != "nt":
+        return {}
+
+    startupinfo = subprocess.STARTUPINFO()
+    startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+    startupinfo.wShowWindow = 0
+    return {
+        "creationflags": getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        "startupinfo": startupinfo,
+    }
+
+
 def find_ffprobe_executable() -> str | None:
     candidates: list[Path] = []
 
@@ -157,6 +170,7 @@ class FFprobeVideoAnalyzer:
                 encoding="utf-8",
                 errors="replace",
                 check=False,
+                **_hidden_process_kwargs(),
             )
         except OSError as exc:
             raise VideoProbeError(f"ffprobe の実行に失敗しました: {file_path}") from exc

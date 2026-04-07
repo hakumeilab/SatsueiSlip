@@ -331,9 +331,6 @@ class MainWindow(QMainWindow):
         self.drop_area = DropArea()
         self.drop_area.pathsDropped.connect(self.handle_dropped_paths)
 
-        self.status_label = QLabel("")
-        self.status_label.setStyleSheet("color: #555;")
-
         self.table = QTableWidget(0, len(self.COLUMNS))
         self.table.setHorizontalHeaderLabels(self.COLUMNS)
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
@@ -381,11 +378,11 @@ class MainWindow(QMainWindow):
 
         root_layout.addWidget(form_widget)
         root_layout.addWidget(self.drop_area)
-        root_layout.addWidget(self.status_label)
         root_layout.addWidget(self.table, 1)
         root_layout.addLayout(footer_summary_layout)
         root_layout.addLayout(button_layout)
         self.setCentralWidget(central)
+        self._setup_status_bar()
 
         self.drop_overlay = DropOverlay(central)
 
@@ -415,8 +412,30 @@ class MainWindow(QMainWindow):
                 background: #f5f5f5;
             }
             QPushButton:hover { background: #e9eef5; }
+            QStatusBar {
+                background: #fafafa;
+                border-top: 1px solid #dcdcdc;
+            }
+            QStatusBar::item { border: none; }
             """
         )
+
+    def _setup_status_bar(self) -> None:
+        status_bar = self.statusBar()
+        status_bar.setSizeGripEnabled(False)
+
+        self.ffprobe_status_label = QLabel("ffprobe: 未確認")
+        self.ffprobe_status_label.setStyleSheet("color: #555;")
+        status_bar.addPermanentWidget(self.ffprobe_status_label)
+
+        self._set_status_message("準備完了")
+
+    def _set_status_message(self, message: str, timeout_ms: int = 0) -> None:
+        self.statusBar().showMessage(message, timeout_ms)
+
+    def _set_ffprobe_status(self, text: str, tooltip: str = "") -> None:
+        self.ffprobe_status_label.setText(text)
+        self.ffprobe_status_label.setToolTip(tooltip)
 
     def _restore_settings(self) -> None:
         self._set_combo_values(self.company_edit, self.app_settings.company_names or [], self.app_settings.company_name)
@@ -443,11 +462,13 @@ class MainWindow(QMainWindow):
         ffprobe_path = find_ffprobe_executable()
         if ffprobe_path:
             self.analyzer = FFprobeVideoAnalyzer(ffprobe_path)
-            self.status_label.setText(f"ffprobe: {ffprobe_path}")
+            self._set_ffprobe_status("ffprobe: 利用可能", ffprobe_path)
+            self._set_status_message("準備完了")
             return
 
         self.analyzer = None
-        self.status_label.setText("ffprobe が見つかりません。PATH か tools\\ffprobe に配置してください。")
+        self._set_ffprobe_status("ffprobe: 未検出")
+        self._set_status_message("ffprobe が見つかりません。PATH か tools\\ffprobe に配置してください。")
 
     def closeEvent(self, event) -> None:
         if self.load_thread and self.load_thread.isRunning():
@@ -481,7 +502,7 @@ class MainWindow(QMainWindow):
         self._hide_drop_overlay()
         paths = [Path(url.toLocalFile()) for url in event.mimeData().urls() if url.toLocalFile()]
         if paths:
-            self.status_label.setText("読み込み準備中...")
+            self._set_status_message("読み込み準備中...")
             QApplication.processEvents()
             self.handle_dropped_paths(paths)
         event.acceptProposedAction()
@@ -514,7 +535,7 @@ class MainWindow(QMainWindow):
             )
             return
 
-        self.status_label.setText("動画を検索中...")
+        self._set_status_message("動画を検索中...")
         self.load_progress = QProgressDialog("動画を検索中...", "キャンセル", 0, 0, self)
         self.load_progress.setWindowModality(Qt.WindowModality.WindowModal)
         self.load_progress.setMinimumDuration(0)
@@ -535,6 +556,7 @@ class MainWindow(QMainWindow):
     def _cancel_video_loading(self) -> None:
         if self.load_thread and self.load_thread.isRunning():
             self.load_thread.requestInterruption()
+            self._set_status_message("読み込みをキャンセル中...")
 
     def _on_video_load_progress(self, done_count: int, total_count: int, file_name: str) -> None:
         if not self.load_progress:
@@ -543,6 +565,7 @@ class MainWindow(QMainWindow):
             self.load_progress.setRange(0, total_count)
         self.load_progress.setValue(done_count)
         self.load_progress.setLabelText(f"動画を解析中... ({done_count}/{total_count})\n{file_name}")
+        self._set_status_message(f"動画を解析中... ({done_count}/{total_count}) {file_name}")
 
     def _on_video_load_finished(
         self,
@@ -568,6 +591,12 @@ class MainWindow(QMainWindow):
                     self.episode_edit.setText(episode_name)
             self._refresh_table()
             self._start_refine_frame_counts([item.file_path for item in loaded_items])
+        elif info_message:
+            self._set_status_message(info_message)
+        elif errors:
+            self._set_status_message("動画の読み込みに失敗しました。")
+        else:
+            self._set_status_message("読み込みを終了しました。")
 
         if info_message:
             QMessageBox.information(self, "読み込み", info_message)
@@ -586,7 +615,7 @@ class MainWindow(QMainWindow):
             self.refine_thread.requestInterruption()
             self.refine_thread.wait(1000)
 
-        self.status_label.setText("フレーム数をバックグラウンドで精査中...")
+        self._set_status_message("フレーム数をバックグラウンドで精査中...")
         self.refine_thread = FrameCountRefineThread(file_paths, self.analyzer, self)
         self.refine_thread.itemRefined.connect(self._on_frame_count_refined)
         self.refine_thread.finished.connect(self._on_refine_finished)
