@@ -453,6 +453,10 @@ class MainWindow(QMainWindow):
         preset_action.triggered.connect(self.edit_presets)
         settings_menu.addAction(preset_action)
 
+        reset_sensitive_action = QAction("会社/作品情報をリセット", self)
+        reset_sensitive_action.triggered.connect(self.reset_sensitive_settings)
+        settings_menu.addAction(reset_sensitive_action)
+
         help_menu = self.menuBar().addMenu("ヘルプ")
         update_action = QAction("GitHubの更新を確認", self)
         update_action.triggered.connect(self.check_for_updates)
@@ -915,6 +919,34 @@ class MainWindow(QMainWindow):
         self._set_combo_values(self.company_edit, company_names, self.company_edit.currentText().strip())
         self._set_combo_values(self.project_edit, project_names, self.project_edit.currentText().strip())
         self._save_settings()
+
+    def reset_sensitive_settings(self) -> None:
+        result = QMessageBox.question(
+            self,
+            "会社/作品情報をリセット",
+            (
+                "保存済みの会社名・作品名、候補一覧、前回の書き出し先、"
+                "差出人フッターをローカル設定から削除します。\n"
+                "動画一覧は削除しません。続行しますか？"
+            ),
+        )
+        if result != QMessageBox.StandardButton.Yes:
+            return
+
+        self.app_settings.company_name = ""
+        self.app_settings.project_name = ""
+        self.app_settings.company_names = []
+        self.app_settings.project_names = []
+        self.app_settings.last_pdf_dir = ""
+        self.app_settings.sender_footer = ""
+
+        self._set_combo_values(self.company_edit, [], "")
+        self._set_combo_values(self.project_edit, [], "")
+        self.sender_footer_edit.clear()
+
+        self._save_settings()
+        self._set_status_message("会社/作品情報をリセットしました。", 5000)
+        QMessageBox.information(self, "リセット完了", "ローカル保存していた会社/作品情報を削除しました。")
 
     def check_for_updates(self) -> None:
         QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)

@@ -21,7 +21,7 @@ if (-not $isccPath) {
 }
 
 if (-not $isccPath) {
-    throw "ISCC.exe が見つかりません。Inno Setup 6 をインストールし、iscc に PATH を通してください。"
+    throw "ISCC.exe was not found. Install Inno Setup 6 and add ISCC.exe to PATH."
 }
 
 & $isccPath $issPath

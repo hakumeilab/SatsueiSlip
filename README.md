@@ -104,7 +104,7 @@ cd SatsueiSlip
 
 生成物:
 
-- `installer_output\SatsueiSlip_Setup_0.1.0.exe`
+- `installer_output\SatsueiSlip_Setup_0.1.1.exe`
 
 インストーラー定義は `installer\SatsueiSlip.iss` です。
 
