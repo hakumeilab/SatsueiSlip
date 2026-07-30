@@ -6,7 +6,7 @@ from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, as_completed
 from datetime import date
 from pathlib import Path
 
-from PySide6.QtCore import QDate, QThread, Qt, QUrl, Signal
+from PySide6.QtCore import QDate, QThread, QTimer, Qt, QUrl, Signal
 from PySide6.QtGui import QAction, QDesktopServices, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -45,6 +45,8 @@ from satsuei_slip.video_probe import (
     find_ffprobe_executable,
     iter_video_files,
 )
+
+FFPROBE_DOWNLOAD_URL = "https://ffmpeg.org/download.html"
 
 
 class DropArea(QFrame):
@@ -281,11 +283,13 @@ class MainWindow(QMainWindow):
         self.load_thread: VideoLoadThread | None = None
         self.load_progress: QProgressDialog | None = None
         self.refine_thread: FrameCountRefineThread | None = None
+        self.ffprobe_install_prompt_shown = False
 
         self._setup_ui()
         self._setup_menu()
         self._restore_settings()
         self._init_analyzer()
+        QTimer.singleShot(0, self._prompt_ffprobe_install_if_missing)
 
     def _setup_ui(self) -> None:
         central = QWidget()
@@ -462,17 +466,55 @@ class MainWindow(QMainWindow):
         update_action.triggered.connect(self.check_for_updates)
         help_menu.addAction(update_action)
 
+        ffprobe_install_action = QAction("ffprobe のインストールページを開く", self)
+        ffprobe_install_action.triggered.connect(self.open_ffprobe_install_page)
+        help_menu.addAction(ffprobe_install_action)
+
     def _init_analyzer(self) -> None:
         ffprobe_path = find_ffprobe_executable()
         if ffprobe_path:
             self.analyzer = FFprobeVideoAnalyzer(ffprobe_path)
+            self.ffprobe_install_prompt_shown = False
             self._set_ffprobe_status("ffprobe: 利用可能", ffprobe_path)
             self._set_status_message("準備完了")
             return
 
         self.analyzer = None
         self._set_ffprobe_status("ffprobe: 未検出")
-        self._set_status_message("ffprobe が見つかりません。PATH か tools\\ffprobe に配置してください。")
+        self._set_status_message("ffprobe が見つかりません。インストールページから ffmpeg を導入してください。")
+
+    def _prompt_ffprobe_install_if_missing(self, force: bool = False) -> None:
+        if self.analyzer:
+            return
+        if self.ffprobe_install_prompt_shown and not force:
+            return
+
+        self.ffprobe_install_prompt_shown = True
+        message_box = QMessageBox(self)
+        message_box.setIcon(QMessageBox.Icon.Warning)
+        message_box.setWindowTitle("ffprobe が必要です")
+        message_box.setText("ffprobe が見つかりません。")
+        message_box.setInformativeText(
+            "動画情報の取得には ffprobe が必要です。FFmpeg をインストールしてから、再確認してください。"
+        )
+        install_button = message_box.addButton("インストールページを開く", QMessageBox.ButtonRole.AcceptRole)
+        retry_button = message_box.addButton("再確認", QMessageBox.ButtonRole.ActionRole)
+        message_box.addButton(QMessageBox.StandardButton.Cancel)
+        message_box.exec()
+
+        clicked_button = message_box.clickedButton()
+        if clicked_button == install_button:
+            self.open_ffprobe_install_page()
+        elif clicked_button == retry_button:
+            self._init_analyzer()
+            if self.analyzer:
+                QMessageBox.information(self, "ffprobe", "ffprobe を検出しました。")
+            else:
+                self._set_status_message("ffprobe がまだ見つかりません。インストール後に再確認してください。")
+
+    def open_ffprobe_install_page(self) -> None:
+        QDesktopServices.openUrl(QUrl(FFPROBE_DOWNLOAD_URL))
+        self._set_status_message("ffprobe のインストールページを開きました。導入後にアプリを再起動するか再確認してください。")
 
     def closeEvent(self, event) -> None:
         if self.load_thread and self.load_thread.isRunning():
@@ -532,11 +574,7 @@ class MainWindow(QMainWindow):
         if not self.analyzer:
             self._init_analyzer()
         if not self.analyzer:
-            QMessageBox.critical(
-                self,
-                "エラー",
-                "ffprobe が見つかりません。PATH に追加するか tools\\ffprobe 配下へ配置してください。",
-            )
+            self._prompt_ffprobe_install_if_missing(force=True)
             return
 
         self._set_status_message("動画を検索中...")
@@ -719,7 +757,7 @@ class MainWindow(QMainWindow):
         if not self.analyzer:
             self._init_analyzer()
         if not self.analyzer:
-            QMessageBox.critical(self, "エラー", "ffprobe が見つかりません。")
+            self._prompt_ffprobe_install_if_missing(force=True)
             return
 
         progress = QProgressDialog("動画を再読み込み中...", "キャンセル", 0, len(self.video_items), self)
