@@ -11,6 +11,7 @@ from PySide6.QtGui import QAction, QDesktopServices, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
+    QCheckBox,
     QComboBox,
     QDateEdit,
     QDialog,
@@ -312,6 +313,11 @@ class MainWindow(QMainWindow):
         self.delivery_date_edit.setDisplayFormat("yyyy-MM-dd")
         self.delivery_date_edit.setDate(QDate.currentDate())
         self.episode_edit = QLineEdit()
+        self.auto_episode_check = QCheckBox("自動入力")
+        self.auto_episode_check.setToolTip("動画読み込み時、話数が空欄ならフォルダー名やファイル名から自動入力します。")
+        episode_layout = QHBoxLayout()
+        episode_layout.addWidget(self.episode_edit)
+        episode_layout.addWidget(self.auto_episode_check)
         self.folder_name_edit = QLineEdit()
         self.head_trim_spin = QSpinBox()
         self.head_trim_spin.setRange(0, 999)
@@ -325,7 +331,7 @@ class MainWindow(QMainWindow):
 
         form_layout.addRow("会社名 *", self.company_edit)
         form_layout.addRow("作品名 *", self.project_edit)
-        form_layout.addRow("話数", self.episode_edit)
+        form_layout.addRow("話数", episode_layout)
         form_layout.addRow("フォルダー名", self.folder_name_edit)
         form_layout.addRow("納品日", self.delivery_date_edit)
         form_layout.addRow("頭引き", self.head_trim_spin)
@@ -446,6 +452,8 @@ class MainWindow(QMainWindow):
         self._set_combo_values(self.project_edit, self.app_settings.project_names or [], self.app_settings.project_name)
         self.sender_footer_edit.setPlainText(self.app_settings.sender_footer)
         self.head_trim_spin.setValue(self.app_settings.head_trim_frames)
+        self.auto_episode_check.setChecked(self.app_settings.auto_episode_enabled)
+        self.auto_episode_check.toggled.connect(self._save_settings)
         if self.app_settings.window_size is not None:
             self.resize(self.app_settings.window_size)
         else:
@@ -627,7 +635,7 @@ class MainWindow(QMainWindow):
             self.video_items.sort(key=lambda item: item.file_name.lower())
             if folder_name and not self.folder_name_edit.text().strip():
                 self.folder_name_edit.setText(folder_name)
-            if not self.episode_edit.text().strip():
+            if self.auto_episode_check.isChecked() and not self.episode_edit.text().strip():
                 episode_name = self._guess_episode_name(folder_name, loaded_items)
                 if episode_name:
                     self.episode_edit.setText(episode_name)
@@ -938,6 +946,7 @@ class MainWindow(QMainWindow):
         )
         self.app_settings.sender_footer = self.sender_footer_edit.toPlainText().strip()
         self.app_settings.head_trim_frames = self.head_trim_spin.value()
+        self.app_settings.auto_episode_enabled = self.auto_episode_check.isChecked()
         self.app_settings.window_size = self.size()
         self.settings_store.save(self.app_settings)
 

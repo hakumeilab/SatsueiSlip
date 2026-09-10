@@ -16,6 +16,7 @@ class AppSettings:
     sender_footer: str = ""
     head_trim_frames: int = 8
     window_size: QSize | None = None
+    auto_episode_enabled: bool = False
 
 
 class SettingsStore:
@@ -35,6 +36,7 @@ class SettingsStore:
             sender_footer=str(self._settings.value("sender_footer", "")),
             head_trim_frames=int(self._settings.value("head_trim_frames", 8)),
             window_size=size,
+            auto_episode_enabled=self._settings.value("auto_episode_enabled", False, type=bool),
         )
 
     def save(self, settings: AppSettings) -> None:
@@ -45,6 +47,7 @@ class SettingsStore:
         self._settings.setValue("last_pdf_dir", settings.last_pdf_dir)
         self._settings.setValue("sender_footer", settings.sender_footer)
         self._settings.setValue("head_trim_frames", settings.head_trim_frames)
+        self._settings.setValue("auto_episode_enabled", settings.auto_episode_enabled)
         if settings.window_size is not None:
             self._settings.setValue("window_size", settings.window_size)
 
