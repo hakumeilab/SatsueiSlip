@@ -160,7 +160,7 @@ class VideoLoadThread(QThread):
 
     def run(self) -> None:
         try:
-            folder_name = ""
+            folder_dir = ""
             loaded_items: list[VideoItem] = []
             errors: list[str] = []
             seen_paths: set[Path] = set()
@@ -177,8 +177,8 @@ class VideoLoadThread(QThread):
                     if path in self.existing_paths or path in seen_paths:
                         continue
                     seen_paths.add(path)
-                    if not folder_name:
-                        folder_name = path.parent.name
+                    if not folder_dir:
+                        folder_dir = str(path.parent)
 
                     future = executor.submit(self.analyzer.analyze_fast, path)
                     future_map[future] = path
@@ -209,7 +209,7 @@ class VideoLoadThread(QThread):
                 self.loadFinished.emit([], [], "新しく追加できる動画ファイルはありませんでした。", "")
                 return
 
-            self.loadFinished.emit(loaded_items, errors, "", folder_name)
+            self.loadFinished.emit(loaded_items, errors, "", folder_dir)
         except Exception as exc:
             self.loadFinished.emit([], [str(exc)], "動画読み込み中にエラーが発生しました。", "")
 
@@ -278,6 +278,7 @@ class MainWindow(QMainWindow):
         self.settings_store = SettingsStore()
         self.app_settings = self.settings_store.load()
         self.video_items: list[VideoItem] = []
+        self.roll_dir: Path | None = None
         self.pdf_exporter = DeliverySlipPdfExporter()
         self.image_exporter = DeliverySlipImageExporter()
         self.analyzer: FFprobeVideoAnalyzer | None = None
@@ -370,11 +371,14 @@ class MainWindow(QMainWindow):
         button_layout = QHBoxLayout()
         self.export_button = QPushButton("PDF書き出し")
         self.export_image_button = QPushButton("画像書き出し")
+        self.export_both_button = QPushButton("PDF+画像書き出し")
+        self.export_both_button.setToolTip("同じ名前でPDFとPNG画像をまとめて書き出します。")
         self.delete_button = QPushButton("選択行削除")
         self.clear_button = QPushButton("一覧クリア")
         self.reload_button = QPushButton("再読み込み")
         button_layout.addWidget(self.export_button)
         button_layout.addWidget(self.export_image_button)
+        button_layout.addWidget(self.export_both_button)
         button_layout.addWidget(self.delete_button)
         button_layout.addStretch(1)
         button_layout.addWidget(self.clear_button)
@@ -382,6 +386,7 @@ class MainWindow(QMainWindow):
 
         self.export_button.clicked.connect(self.export_pdf)
         self.export_image_button.clicked.connect(self.export_image)
+        self.export_both_button.clicked.connect(self.export_pdf_and_image)
         self.delete_button.clicked.connect(self.delete_selected_rows)
         self.clear_button.clicked.connect(self.clear_items)
         self.reload_button.clicked.connect(self.reload_items)
@@ -622,15 +627,19 @@ class MainWindow(QMainWindow):
         loaded_items: list[VideoItem],
         errors: list[str],
         info_message: str,
-        folder_name: str,
+        folder_dir: str,
     ) -> None:
         if self.load_progress:
             self.load_progress.close()
             self.load_progress = None
 
         self.load_thread = None
+        folder_name = Path(folder_dir).name if folder_dir else ""
 
         if loaded_items:
+            # 伝票は最初に読み込んだロールのものなので、書き出し先もそのフォルダーにする。
+            if self.roll_dir is None and folder_dir:
+                self.roll_dir = Path(folder_dir)
             self.video_items.extend(loaded_items)
             self.video_items.sort(key=lambda item: item.file_name.lower())
             if folder_name and not self.folder_name_edit.text().strip():
@@ -747,6 +756,8 @@ class MainWindow(QMainWindow):
 
         for item_index in selected_indexes:
             del self.video_items[item_index]
+        if not self.video_items:
+            self.roll_dir = None
         self._refresh_table()
 
     def clear_items(self) -> None:
@@ -756,6 +767,7 @@ class MainWindow(QMainWindow):
         if result != QMessageBox.StandardButton.Yes:
             return
         self.video_items.clear()
+        self.roll_dir = None
         self._refresh_table()
 
     def reload_items(self) -> None:
@@ -820,7 +832,7 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "入力エラー", validation_error)
             return
 
-        default_dir = self.app_settings.last_pdf_dir or str(Path.home() / "Desktop")
+        default_dir = self._default_export_dir()
         default_name = f"{self._default_export_stem(delivery_info)}.pdf"
         default_path = str(Path(default_dir) / default_name)
         output_path_text, _ = QFileDialog.getSaveFileName(
@@ -853,7 +865,7 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "入力エラー", validation_error)
             return
 
-        default_dir = self.app_settings.last_pdf_dir or str(Path.home() / "Desktop")
+        default_dir = self._default_export_dir()
         default_name = f"{self._default_export_stem(delivery_info)}.png"
         default_path = str(Path(default_dir) / default_name)
         output_path_text, _ = QFileDialog.getSaveFileName(
@@ -885,6 +897,65 @@ class MainWindow(QMainWindow):
                 f"{output_paths[0].parent}\\{output_path.stem}_01.png など"
             )
         QMessageBox.information(self, "画像書き出し完了", message)
+
+    def export_pdf_and_image(self) -> None:
+        delivery_info = self._collect_delivery_info()
+        validation_error = self._validate_before_export(delivery_info)
+        if validation_error:
+            QMessageBox.warning(self, "入力エラー", validation_error)
+            return
+
+        default_dir = self._default_export_dir()
+        default_name = f"{self._default_export_stem(delivery_info)}.pdf"
+        default_path = str(Path(default_dir) / default_name)
+        output_path_text, _ = QFileDialog.getSaveFileName(
+            self,
+            "納品伝票PDFと画像を書き出し",
+            default_path,
+            "PDFファイル (*.pdf)",
+        )
+        if not output_path_text:
+            return
+
+        pdf_path = Path(output_path_text)
+        if pdf_path.suffix.lower() != ".pdf":
+            pdf_path = pdf_path.with_suffix(".pdf")
+        image_path = pdf_path.with_suffix(".png")
+
+        try:
+            self.pdf_exporter.export(pdf_path, delivery_info, self.video_items)
+        except Exception as exc:
+            QMessageBox.critical(self, "PDF出力エラー", f"PDFの書き出しに失敗しました。\n{exc}")
+            return
+        try:
+            image_paths = self.image_exporter.export(image_path, delivery_info, self.video_items)
+        except Exception as exc:
+            QMessageBox.critical(
+                self,
+                "画像出力エラー",
+                f"PDFは書き出しましたが、画像の書き出しに失敗しました。\n{pdf_path}\n\n{exc}",
+            )
+            return
+
+        self.app_settings.last_pdf_dir = str(pdf_path.parent)
+        self._save_settings()
+        if len(image_paths) == 1:
+            image_text = str(image_paths[0])
+        else:
+            image_text = f"{len(image_paths)}枚 ({image_paths[0].parent}\\{image_path.stem}_01.png など)"
+        QMessageBox.information(
+            self,
+            "PDF+画像書き出し完了",
+            f"PDFと画像を書き出しました。\nPDF: {pdf_path}\n画像: {image_text}",
+        )
+
+    def _default_export_dir(self) -> str:
+        # 読み込んだロールのフォルダーを優先し、無ければ前回の書き出し先、それも無ければデスクトップ。
+        if self.roll_dir is not None and self.roll_dir.is_dir():
+            return str(self.roll_dir)
+        if self.app_settings.last_pdf_dir and Path(self.app_settings.last_pdf_dir).is_dir():
+            return self.app_settings.last_pdf_dir
+        return str(Path.home() / "Desktop")
 
     def _collect_delivery_info(self) -> DeliveryInfo:
         qdate = self.delivery_date_edit.date()
