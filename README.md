@@ -105,7 +105,7 @@ cd SatsueiSlip
 
 生成物:
 
-- `installer_output\SatsueiSlip_Setup_0.1.1.exe`
+- `installer_output\SatsueiSlip_Setup_0.1.2.exe`
 
 インストーラー定義は `installer\SatsueiSlip.iss` です。
 
@@ -127,7 +127,7 @@ GITHUB_REPO = "SatsueiSlip"
 1. `src\satsuei_slip\__init__.py` の `__version__` を更新します。
 2. `installer\SatsueiSlip.iss` の `MyAppVersion` を同じバージョンへ更新します。
 3. `.\scripts\build_installer.ps1` で新しいインストーラーを作成します。
-4. GitHub の Releases で、タグ名を `v0.1.1` のように付けてインストーラーexeを添付します。
+4. GitHub の Releases で、タグ名を `v0.1.2` のように付けてインストーラーexeを添付します。
 
 アプリは `https://api.github.com/repos/<owner>/<repo>/releases/latest` を参照し、現在の `__version__` より新しいタグがあればリリースページを開けるようにします。
 

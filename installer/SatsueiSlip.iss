@@ -1,6 +1,6 @@
 #define MyAppName "SatsueiSlip"
 #ifndef MyAppVersion
-#define MyAppVersion "0.1.1"
+#define MyAppVersion "0.1.2"
 #endif
 #define MyAppPublisher "SatsueiSlip"
 #define MyAppExeName "SatsueiSlip.exe"
